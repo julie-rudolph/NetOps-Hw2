@@ -1,0 +1,3 @@
+{% for listitem in data %}
+{{ hostname }},{{ listitem.mac }},{{listitem["phy-intf"]}},{{listitem["ip-addr-out"]}},{{listitem["intf-out"]}}
+{% endfor %}

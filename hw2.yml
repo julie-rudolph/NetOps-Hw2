@@ -1,0 +1,59 @@
+---
+- name: Get arp detail table from Cisco NXOS switch.
+  hosts: nxos
+  gather_facts: no
+  connection: local
+  vars:
+  - output: outdir
+  #- mydict: {{ inventory_hostname }}:{{arp_detail_table}} 
+  tasks:
+  - file: path={{output}} state=directory
+    run_once: true
+  - file: path={{output}}/{{inventory_hostname}} state=directory
+  - file: path={{output}}/{{inventory_hostname}}/list-of-macs.txt state=touch
+  - nxos_command:
+     commands: show ip arp detail vrf all | json
+     provider: "{{ cli }}"
+    register: result
+  #- debug: var=result.stdout
+
+  ######  Examples of output to files using copy
+  - copy: content="{{result.stdout_lines[0].TABLE_vrf.ROW_vrf.TABLE_adj.ROW_adj}}" dest={{output}}/{{inventory_hostname}}.json
+  - copy: content="{{result.stdout_lines[0]}}" dest={{output}}/{{inventory_hostname}}_longer.json
+
+  ###### Example of output to files using lineinfile 
+  - lineinfile:
+      dest: "{{output}}/{{inventory_hostname}}/list-of-macs.txt"
+      line: '{{ item.mac }},{{item["phy-intf"]}},{{item["ip-addr-out"]}},{{item["intf-out"]}}'
+    with_items: 
+      - "{{ result.stdout_lines[0].TABLE_vrf.ROW_vrf.TABLE_adj.ROW_adj }}"
+
+  ###### Example of putting the results into a data structure - in this case a
+  ###### list of dictionaries - and printing using Jinja2 templte 
+
+  - set_fact: json_result="{{ result.stdout[0] }}"
+  - set_fact: arp_detail_table="{{ json_result.TABLE_vrf.ROW_vrf.TABLE_adj.ROW_adj }}"
+  - template:
+      src: templates/macarpreport.j2
+      dest: outdir/{{inventory_hostname}}_report.txt
+    vars:
+       data: "{{arp_detail_table}}"
+       hostname: "{{inventory_hostname}}"
+
+### I really wanted to combine all the results into a data structure but didn't get this to work.  
+#  - set_fact: mydict = "{{ inventory_hostname }}":"{{arp_detail_table}}" 
+#  #vars: 
+#  #- mydict: "{{ inventory_hostname }}:{{arp_detail_table}}" 
+ 
+#  - set_fact:
+#      #fabric_arp_detail: "{{ fabric_arp_detail|default({}) | combine ( { inventory_hostname: [ item ]} ) }}"
+#      fabric_arp_detail: "{{ fabric_arp_detail|default({}) | combine(mydict) }}"
+#    with_items:
+#      - "{{ result.stdout_lines[0].TABLE_vrf.ROW_vrf.TABLE_adj.ROW_adj }}"
+
+#  - set_fact:
+#      #fabric_arp_detail: "{{ fabric_arp_detail|default({}) | combine ( { inventory_hostname: [ item ]} ) }}"
+#      fabric_arp_detail: "{{ fabric_arp_detail|default({}) | combine(mydict) }}"
+#    with_dict:
+#      #- "{{ result.stdout_lines[0].TABLE_vrf.ROW_vrf.TABLE_adj.ROW_adj }}"
+#      - mydict
